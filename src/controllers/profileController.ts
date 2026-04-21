@@ -44,12 +44,12 @@ const getNameMetaInformation = async (name: string): Promise<Status> => {
     const data: NameMeta = {
         name,
         gender: genderData.gender.toLowerCase(),
-        gender_probability: genderData.gender_probability,
+        gender_probability: genderData.probability,
         sample_size: genderData.count,
         age: ageData.age,
         age_group: ageGroup,
         country_id: country.country_id.toLowerCase(),
-        country_probability: country.country_probability
+        country_probability: country.probability
     };
 
     return { status: "success", data };
