@@ -3,7 +3,7 @@ import { getPool } from "../db/conn.js";
 import type { NameMeta } from "../model/nameMeta.js"
 import { getDatabase } from '../db/conn.js';
 import { profiles } from '../schema/profile.schema.js';
-import { and, asc, desc, eq, gt, lt, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, lt } from 'drizzle-orm';
 
 type Status = {
     status: "success" | "failure",
@@ -84,7 +84,6 @@ const createProfile = async (req: Request, res: Response) => {
             name: response.name,
             gender: response.gender as string,
             gender_probability: response.gender_probability,
-            sample_size: response.sample_size,
             age: response.age,
             age_group: response.age_group as string,
             country_id: response.country_id,
@@ -101,7 +100,7 @@ const createProfile = async (req: Request, res: Response) => {
 
 const getAllProfiles = async (req: Request, res: Response) => {
     try {
-        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order } = req.query as {
+        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order, page, limit } = req.query as {
             gender?: string;
             country_id?: string;
             age_group?: string;
@@ -111,7 +110,12 @@ const getAllProfiles = async (req: Request, res: Response) => {
             max_gender_probability?: number;
             sort_by?: "age" | "created_at" | "gender_probability";
             order?: "asc" | "desc";
+            page?: number;
+            limit?: number;
         };
+
+        const pageNumber = page ? page : 1;
+        const limitNumber = limit ? (limit > 0 && limit <= 50 ? limit : 10) : 10;
 
         const db = getDatabase();
 
@@ -133,9 +137,13 @@ const getAllProfiles = async (req: Request, res: Response) => {
             max_age ? lt(profiles.age, max_age) : undefined,
             min_gender_probability ? gt(profiles.gender_probability, min_gender_probability) : undefined,
             max_gender_probability ? lt(profiles.gender_probability, max_gender_probability) : undefined
-        )).orderBy(...(sortOrder ? [sortOrder] : []));
+        )).orderBy(...(sortOrder ? [sortOrder] : []))
+            .limit(limitNumber)
+            .offset((pageNumber - 1) * limitNumber);
 
-        return res.status(200).json({ status: "success", count: result.length, data: result });
+        const rowCount = await db.select({ count: count() }).from(profiles);
+
+        return res.status(200).json({ status: "success", page: pageNumber, limit: limitNumber, total: rowCount[0]?.count ?? 2026, data: result });
     }
     catch (err) {
         console.log(err);
