@@ -218,6 +218,36 @@ Returns 204 on success
 ```
 
 ## Parsing Rules
+The parser relies greatly on regex to parse query strings. These are some of the rules it follows
+### 1. Age Rules
+`NOTE`: The parser parses explicit ages first before parsing age group descriptions i.e the parser would parse "between 10 and 17" before "parsing young"
+| Input pattern | Example query | `min` | `max` | `age_group` |
+|---|---|---|---|---|
+| `between X and Y` | "between 20 and 35" | `20` | `35` | — |
+| `above\|over\|older than\|at least\|minimum of\|from X` | "above 30" | `30` | — | — |
+| `below\|under\|younger than\|at most\|maximum of\|up to X` | "under 40" | — | `40` | — |
+| `young` token | "young males" | `16` | `24` | — |
+| `child` token | "children from nigeria" | `0` | `12` | `child` |
+| `teenager` token | "teenagers in ghana" | `13` | `19` | `teenager` |
+| `adult` token | "adult females" | `20` | `59` | `adult` |
+| `senior` token | "senior men above 65" | `65` | `Infinity` | `senior` |
+| group token + explicit min | "teenagers above 17" | `17` | `19` | `teenager` |
+| group token + explicit max | "adults under 40" | `20` | `40` | `adult` |
+| no age signal | "females from kenya" | — | — | — |
+
+### 2. Gender Rules
+The parser looks for either of the following keywords
+| Input Pattern | Gender |
+|---|---|
+`female\|girls\|lady\|ladies\|women\|woman\|females\|girl`|`female`
+`male\|males\|boys\|boy\|man\|men\|gentleman\|gentlemen`|`male`
+
+### 3. Country Rules
+The parser simply breaks the string into tokens and compares each string with a country in the case of single word countries.
+
+In the case of countries made up of more than one token, we compile a list of double(or thriple) word countries and check if they exist in the parsed string.
+
+The parsed country is then converted to a country code and used to search the database
 
 
 ## Support

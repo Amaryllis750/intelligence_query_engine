@@ -1,50 +1,25 @@
-const GENDER_MAP = {
-    male: 'male', males: 'male', man: 'male', men: 'male',
-    boy: 'male', boys: 'male', gentleman: 'male', gentlemen: 'male',
-    female: 'female', females: 'female', woman: 'female', women: 'female',
-    girl: 'female', girls: 'female', lady: 'female', ladies: 'female',
-};
+import { extractAge } from "./age_functions.js";
+import { extractGender } from "./gender_functions.js";
+import { extractCountry } from "./country_function.js";
 
-const AGE_MAP = {
-    young: { min: 16, max: 24 },
-    child: { min: 0, max: 2 },
-    teenager: { min: 13, max: 19 },
-    adult: { min: 20, max: 59 },
-    senior: { min: 60, max: Infinity }
-};
+export function parseSearchQuery(query: string) {
+    if (!query?.trim()) return {};
 
-export function extractGender(tokens: string[]) {
-    const found = new Set();
+    const normalized = query.trim().toLowerCase();
+    const tokens = normalized.split(/[\s,]+/).filter(Boolean);
 
-    for (const token of tokens) {
-        const mapped = GENDER_MAP[token as keyof typeof GENDER_MAP];
-        if (mapped) found.add(mapped);
-    }
+    const filters: {gender?:string, age_group?: string, min_age?: number, max_age?: number, country_id?: string} = {};
 
-    if (found.size === 1) return [...found][0]; // meaning only one gender was found
-    return null; // meaning both genders where found therefore no filter
-}
+    const gender = extractGender(tokens);
+    if (gender) filters.gender = gender.toLowerCase();
 
-export function extractAgeRange(query: string) {
-    const result: { min?: number, max?: number } = { max: 100, min: 0 };
+    const age = extractAge(normalized, tokens);
+    if (age.age_group) filters.age_group = age.age_group;
+    if (age.min) filters.min_age = age.min;
+    if (age.max) filters.max_age = age.max;
 
-    // rank explicit age specifications above age group
-    const between = query.match(/between\s+(\d+)\s+and\s+(\d+)/i);
-    if (between) {
-        result.min = parseInt(between[1] ?? "0");
-        result.max = parseInt(between[2] ?? "100");
-        return result; // between is unambiguous — skip further checks
-    }
+    const country = extractCountry(normalized, tokens);
+    if (country) filters.country_id = country.toLowerCase();
 
-    const minMatch = query.match(
-        /(?:above|over|older than|at least|minimum of?|from)\s+(\d+)/i
-    );
-    if (minMatch) result.min = parseInt(minMatch[1] ?? "0");
-
-    const maxMatch = query.match(
-        /(?:below|under|younger than|at most|maximum of?|up to)\s+(\d+)/i
-    );
-    if (maxMatch) result.max = parseInt(maxMatch[1] ?? "100");
-
-    return result;
+    return filters;
 }

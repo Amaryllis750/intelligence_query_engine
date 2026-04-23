@@ -4,6 +4,7 @@ import { getDatabase } from '../db/conn.js';
 import { profiles } from '../schema/profile.schema.js';
 import { and, asc, count, desc, eq, gt, lt } from 'drizzle-orm';
 import { getCountryData } from 'countries-list';
+import { parseSearchQuery } from '../util/parser.js';
 
 type Status = {
     status: "success" | "failure",
@@ -184,4 +185,47 @@ const deleteProfile = async (req: Request, res: Response) => {
     }
 }
 
-export { createProfile, getProfile, deleteProfile, getAllProfiles }
+const searchProfiles = async (req: Request, res: Response) => {
+    try {
+        const { q, page, limit } = req.query as { q?: string, page?: number, limit?: number };
+        if (!q) return res.status(400).json({ status: "error", message: "Unable to Interpret Query" });
+
+        const pageNumber = page ? page : 1;
+        const limitNumber = limit ? (limit > 0 && limit <= 50 ? limit : 10) : 10;
+
+        const db = getDatabase();
+        const filter = parseSearchQuery(q);
+        
+        const filters = [
+            filter.gender ? eq(profiles.gender, filter.gender) : undefined,
+            filter.min_age ? gt(profiles.age, filter.min_age) : undefined,
+            filter.max_age ? lt(profiles.age, filter.max_age) : undefined,
+            filter.age_group ? eq(profiles.age_group, filter.age_group) : undefined,
+            filter.country_id ? eq(profiles.country_id, filter.country_id) : undefined
+        ].filter(Boolean);
+
+        const [totalResult] = await db
+            .select({ count: count() })
+            .from(profiles)
+            .where(and(...filters));
+
+        const totalCount = totalResult?.count;
+
+        // 3. Get the Paginated Data
+        const result = await db
+            .select()
+            .from(profiles)
+            .where(and(...filters))
+            .limit(limitNumber)
+            .offset((pageNumber - 1) * limitNumber);
+
+        return res.status(200).json({ status: "success", page: pageNumber, limit: limitNumber, total: totalCount, data: result })
+    }
+    catch (err) {
+        console.log(err);
+        return res.status(500).json({ status: "error", message: "Server failure" })
+    }
+
+}
+
+export { createProfile, getProfile, deleteProfile, getAllProfiles, searchProfiles }
