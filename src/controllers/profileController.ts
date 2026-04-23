@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
-import { getPool } from "../db/conn.js";
 import type { NameMeta } from "../model/nameMeta.js"
 import { getDatabase } from '../db/conn.js';
 import { profiles } from '../schema/profile.schema.js';
 import { and, asc, count, desc, eq, gt, lt } from 'drizzle-orm';
+import { getCountryData } from 'countries-list';
 
 type Status = {
     status: "success" | "failure",
@@ -43,6 +43,7 @@ const getNameMetaInformation = async (name: string): Promise<Status> => {
     if (!nationalityData.country) return { "status": "failure", "errorApi": "Nationalize" };
     // get the country with the highest probability
     const country = nationalityData.country.reduce((acc: Country, current: Country) => current.probability > acc.probability ? current : acc);
+    const countryName = getCountryData(country.country_id).name;
 
     const data: NameMeta = {
         name,
@@ -52,6 +53,7 @@ const getNameMetaInformation = async (name: string): Promise<Status> => {
         age: ageData.age,
         age_group: ageGroup,
         country_id: country.country_id.toLowerCase(),
+        country_name: countryName.toLowerCase(),
         country_probability: country.probability
     };
 
@@ -88,6 +90,7 @@ const createProfile = async (req: Request, res: Response) => {
             age_group: response.age_group as string,
             country_id: response.country_id,
             country_probability: response.country_probability,
+            country_name: response.country_name
         }).returning();
 
         return res.status(201).json({ status: "success", data: inserted[0] });

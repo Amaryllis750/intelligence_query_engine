@@ -8,7 +8,8 @@ const profiles = pgTable("profiles", {
     age: integer("age").notNull(), 
     age_group: text("age_group").notNull(), 
     country_id: text("country_id").notNull(), 
-    country_probability: real("country_probability").notNull(), 
+    country_probability: real("country_probability").notNull(),
+    country_name: text("country_name").notNull(),
     created_at: date("created_at").notNull().defaultNow()
 });
 
