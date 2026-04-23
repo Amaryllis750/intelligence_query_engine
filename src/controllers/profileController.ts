@@ -104,7 +104,7 @@ const createProfile = async (req: Request, res: Response) => {
 
 const getAllProfiles = async (req: Request, res: Response) => {
     try {
-        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order, page, limit } = req.query as {
+        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order, page, limit, ...others } = req.query as {
             gender?: string;
             country_id?: string;
             age_group?: string;
@@ -116,7 +116,9 @@ const getAllProfiles = async (req: Request, res: Response) => {
             order?: "asc" | "desc";
             page?: number;
             limit?: number;
+            [key: string]: any
         };
+        if(Object.keys(others).length > 0) return res.status(400).json({status: "error", message: "Invalid query parameters"});
 
         const pageNumber = page ? page : 1;
         const limitNumber = limit ? (limit > 0 && limit <= 50 ? limit : 10) : 10;
@@ -187,7 +189,8 @@ const deleteProfile = async (req: Request, res: Response) => {
 
 const searchProfiles = async (req: Request, res: Response) => {
     try {
-        const { q, page, limit } = req.query as { q?: string, page?: number, limit?: number };
+        const { q, page, limit, ...others } = req.query as { q?: string, page?: number, limit?: number, [key: string]: any };
+        if(Object.keys(others).length > 0) return res.status(400).json({status: "error", message: "Invalid query parameters"});
         if (!q) return res.status(400).json({ status: "error", message: "Unable to Interpret Query" });
 
         const pageNumber = page ? page : 1;
@@ -195,7 +198,7 @@ const searchProfiles = async (req: Request, res: Response) => {
 
         const db = getDatabase();
         const filter = parseSearchQuery(q);
-        
+
         const filters = [
             filter.gender ? eq(profiles.gender, filter.gender) : undefined,
             filter.min_age ? gt(profiles.age, filter.min_age) : undefined,
