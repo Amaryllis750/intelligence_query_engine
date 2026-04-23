@@ -110,7 +110,7 @@ const getAllProfiles = async (req: Request, res: Response) => {
             return res.status(400).json({status: "error", message: "Invalid query parameters"})
         }
 
-        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order, page, limit, ...others } = query.data;
+        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, min_country_probability, sort_by, order, page, limit, ...others } = query.data;
         const pageNumber = page ? page : 1;
         const limitNumber = limit ? (limit > 0 && limit <= 50 ? limit : 10) : 10;
 
@@ -133,7 +133,7 @@ const getAllProfiles = async (req: Request, res: Response) => {
             min_age ? gt(profiles.age, min_age) : undefined,
             max_age ? lt(profiles.age, max_age) : undefined,
             min_gender_probability ? gt(profiles.gender_probability, min_gender_probability) : undefined,
-            max_gender_probability ? lt(profiles.gender_probability, max_gender_probability) : undefined
+            min_country_probability ? lt(profiles.country_probability, min_country_probability) : undefined
         )).orderBy(...(sortOrder ? [sortOrder] : []))
             .limit(limitNumber)
             .offset((pageNumber - 1) * limitNumber);
