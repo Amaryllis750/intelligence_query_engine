@@ -2,8 +2,8 @@ import { z } from "zod";
 
 const getProfileQuerySchema = z.object({
     gender: z.enum(["male", "female"]).optional(),
-    country_id: z.string().optional(),
-    age_group: z.string().optional(),
+    country_id: z.string().toLowerCase().optional(),
+    age_group: z.string().toLowerCase().optional(),
     min_age: z.coerce.number().optional(),
     max_age: z.coerce.number().optional(),
     min_gender_probability: z.coerce.number().optional(),
@@ -15,7 +15,7 @@ const getProfileQuerySchema = z.object({
 }).strict();
 
 const searchProfileQuerySchema = z.object({
-    q: z.string(),
+    q: z.string().toLowerCase(),
     page: z.coerce.number().optional(), 
     limit: z.coerce.number().optional()
 });
