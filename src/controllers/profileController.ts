@@ -1,6 +1,9 @@
 import type { Request, Response } from 'express';
 import { getPool } from "../db/conn.js";
 import type { NameMeta } from "../model/nameMeta.js"
+import { getDatabase } from '../db/conn.js';
+import { profiles } from '../schema/profile.schema.js';
+import { and, asc, desc, eq, gt, lt, SQL } from 'drizzle-orm';
 
 type Status = {
     status: "success" | "failure",
@@ -57,33 +60,86 @@ const getNameMetaInformation = async (name: string): Promise<Status> => {
 
 const createProfile = async (req: Request, res: Response) => {
     try {
-        const pool = getPool();
+        const db = getDatabase();
 
-        const nameRegex = /^[a-zA-Z'-]+$/;  // regex for testing names
+        const nameRegex = /^[a-zA-Z'-]+$/;
         let name = req.body.name;
 
-        if (!name) return res.status(400).json({ "status": "error", "message": "Missing name or bad name" });
-        if (typeof (name) != "string") return res.status(400).json({ "status": "error", "message": "Name should be a string" });
-        if (!nameRegex.test(name)) return res.status(422).json({ "status": "error", "message": "Unprocessable entity" });
+        if (!name) return res.status(400).json({ status: "error", message: "Missing name or bad name" });
+        if (typeof name !== "string") return res.status(400).json({ status: "error", message: "Name should be a string" });
+        if (!nameRegex.test(name)) return res.status(422).json({ status: "error", message: "Unprocessable entity" });
 
         name = name.toLowerCase();
         const result = await getNameMetaInformation(name);
-        if (result.status == "failure") {
-            return res.json({ "status": "error", "message": `${!result.errorApi} returned an invalid response` }).status(502);
+        if (result.status === "failure") {
+            return res.status(502).json({ status: "error", message: `${!result.errorApi} returned an invalid response` });
         }
         const response = result.data!;
 
         // check if the name exists in the database
-        let nameMeta = await pool.query("SELECT * FROM name_metainfo WHERE name=$1", [name]);
-        if (nameMeta.rowCount != 0) return res.status(200).json({ "status": "success", message: "Profile already exists", data: nameMeta.rows[0]});
+        const existing = await db.select().from(profiles).where(eq(profiles.name, name));
+        if (existing.length > 0) return res.status(200).json({ status: "success", message: "Profile already exists", data: existing[0] });
 
-        nameMeta = await pool.query("INSERT INTO name_metainfo (name, gender, gender_probability, sample_size, age, age_group, country_id, country_probability) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) returning *", [response.name, response.gender, response.gender_probability, response.sample_size, response.age, response.age_group, response.country_id, response.country_probability]);
+        const inserted = await db.insert(profiles).values({
+            name: response.name,
+            gender: response.gender as string,
+            gender_probability: response.gender_probability,
+            sample_size: response.sample_size,
+            age: response.age,
+            age_group: response.age_group as string,
+            country_id: response.country_id,
+            country_probability: response.country_probability,
+        }).returning();
 
-        return res.status(201).json({ "status": "success", "data": nameMeta.rows[0] });
+        return res.status(201).json({ status: "success", data: inserted[0] });
     }
     catch (err) {
         console.log(err);
-        return res.status(500).json({ "status": "error", "message": "Upstream or server failure" });
+        return res.status(500).json({ status: "error", message: "Upstream or server failure" });
+    }
+}
+
+const getAllProfiles = async (req: Request, res: Response) => {
+    try {
+        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order } = req.query as {
+            gender?: string;
+            country_id?: string;
+            age_group?: string;
+            min_age?: number;
+            max_age?: number;
+            min_gender_probability?: number;
+            max_gender_probability?: number;
+            sort_by?: "age" | "created_at" | "gender_probability";
+            order?: "asc" | "desc";
+        };
+
+        const db = getDatabase();
+
+        const sortColumn = sort_by === "age"
+            ? profiles.age
+            : sort_by === "gender_probability"
+                ? profiles.gender_probability
+                : profiles.created_at;
+
+        const sortOrder = sort_by
+            ? (order === "desc" ? desc(sortColumn) : asc(sortColumn))
+            : undefined;
+
+        const result = await db.select().from(profiles).where(and(
+            gender ? eq(profiles.gender, gender) : undefined,
+            age_group ? eq(profiles.age_group, age_group) : undefined,
+            country_id ? eq(profiles.country_id, country_id) : undefined,
+            min_age ? gt(profiles.age, min_age) : undefined,
+            max_age ? lt(profiles.age, max_age) : undefined,
+            min_gender_probability ? gt(profiles.gender_probability, min_gender_probability) : undefined,
+            max_gender_probability ? lt(profiles.gender_probability, max_gender_probability) : undefined
+        )).orderBy(...(sortOrder ? [sortOrder] : []));
+
+        return res.status(200).json({ status: "success", count: result.length, data: result });
+    }
+    catch (err) {
+        console.log(err);
+        return res.status(500).json({ status: "error", message: "Upstream or server failure" });
     }
 }
 
@@ -91,54 +147,30 @@ const getProfile = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
 
-        const pool = getPool();
-        const result = await pool.query("select * from name_metainfo where id=$1", [id]);
+        const db = getDatabase();
+        const result = await db.select().from(profiles).where(eq(profiles.id, id as string));
 
-        return res.json({ "status": "success", "data": result.rows[0] });
+        return res.status(200).json({ status: "success", data: result[0] });
     }
-    catch(err){
-        console.log(err);
-        return res.status(500).json({ "status": "error", "message": "Upstream or server failure" });
-    }
-}
-
-const getProfiles = async (req: Request, res: Response) => {
-    try {
-        const { gender, country_id, age_group } = req.query as {
-            gender?: string;
-            country_id?: string;
-            age_group?: string;
-        };
-
-        const pool = getPool();
-
-        const result = await pool.query(
-            `SELECT * FROM name_metainfo 
-             WHERE ($1::text IS NULL OR gender = $1::text) 
-             AND ($2::text IS NULL OR country_id = $2::text) 
-             AND ($3::text IS NULL OR age_group = $3::text);`,
-            [gender || null, country_id || null, age_group || null]
-        );
-
-        return res.json({ status: "success", count: result.rowCount, data: result.rows });
-    } catch (err) {
+    catch (err) {
         console.log(err);
         return res.status(500).json({ status: "error", message: "Upstream or server failure" });
     }
-};
+}
 
 const deleteProfile = async (req: Request, res: Response) => {
-    try{
-        const {id} = req.params;
+    try {
+        const { id } = req.params;
 
-        const pool = getPool();
-        const result = await pool.query("delete from name_metainfo where id=$1", [id]);
+        const db = getDatabase();
+        await db.delete(profiles).where(eq(profiles.id, id as string));
 
         return res.sendStatus(204);
     }
-    catch(err){
-        return res.status(500).json({ "status": "error", "message": "Upstream or server failure" });
+    catch (err) {
+        console.log(err);
+        return res.status(500).json({ status: "error", message: "Upstream or server failure" });
     }
 }
 
-export { createProfile, getProfile, getProfiles, deleteProfile }
+export { createProfile, getProfile, deleteProfile, getAllProfiles }
