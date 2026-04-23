@@ -5,6 +5,7 @@ import { profiles } from '../schema/profile.schema.js';
 import { and, asc, count, desc, eq, gt, lt } from 'drizzle-orm';
 import { getCountryData } from 'countries-list';
 import { parseSearchQuery } from '../util/parser.js';
+import {getProfileQuerySchema, searchProfileQuerySchema} from '../model/profile.validator.js';
 
 type Status = {
     status: "success" | "failure",
@@ -104,22 +105,12 @@ const createProfile = async (req: Request, res: Response) => {
 
 const getAllProfiles = async (req: Request, res: Response) => {
     try {
-        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order, page, limit, ...others } = req.query as {
-            gender?: string;
-            country_id?: string;
-            age_group?: string;
-            min_age?: number;
-            max_age?: number;
-            min_gender_probability?: number;
-            max_gender_probability?: number;
-            sort_by?: "age" | "created_at" | "gender_probability";
-            order?: "asc" | "desc";
-            page?: number;
-            limit?: number;
-            [key: string]: any
-        };
-        if(Object.keys(others).length > 0) return res.status(400).json({status: "error", message: "Invalid query parameters"});
+        const query = getProfileQuerySchema.safeParse(req.query);
+        if(!query.success){
+            return res.status(400).json({status: "error", message: "Invalid query parameters"})
+        }
 
+        const { gender, country_id, age_group, min_age, max_age, min_gender_probability, max_gender_probability, sort_by, order, page, limit, ...others } = query.data;
         const pageNumber = page ? page : 1;
         const limitNumber = limit ? (limit > 0 && limit <= 50 ? limit : 10) : 10;
 
@@ -189,15 +180,21 @@ const deleteProfile = async (req: Request, res: Response) => {
 
 const searchProfiles = async (req: Request, res: Response) => {
     try {
-        const { q, page, limit, ...others } = req.query as { q?: string, page?: number, limit?: number, [key: string]: any };
-        if(Object.keys(others).length > 0) return res.status(400).json({status: "error", message: "Invalid query parameters"});
-        if (!q) return res.status(400).json({ status: "error", message: "Unable to Interpret Query" });
+        const query = searchProfileQuerySchema.safeParse(req.query);
+        if(!query.success){
+            return res.status(400).json({status: "error", message: "Invalid query parameters"});
+        }
+        const { q, page, limit, ...others } = query.data;
 
         const pageNumber = page ? page : 1;
         const limitNumber = limit ? (limit > 0 && limit <= 50 ? limit : 10) : 10;
 
         const db = getDatabase();
-        const filter = parseSearchQuery(q);
+        const parseResult = parseSearchQuery(q);
+
+        if(parseResult.noTokensFound) return res.status(400).json({status: "error", message: "Unable to interpret query"})
+
+        const filter = parseResult.filters!;
 
         const filters = [
             filter.gender ? eq(profiles.gender, filter.gender) : undefined,

@@ -5,14 +5,15 @@ const GENDER_MAP = {
     girl: 'female', girls: 'female', lady: 'female', ladies: 'female',
 };
 
-export function extractGender(tokens: string[]):string|null {
+export function extractGender(tokens: string[]): Set<string> {
     const found = new Set<string>();
 
     for (const token of tokens) {
         const mapped = GENDER_MAP[token as keyof typeof GENDER_MAP];
-        if (mapped) found.add(mapped);
+        if (mapped){
+            found.add(mapped);
+        }
     }
 
-    if (found.size === 1) return [...found][0]!; // meaning only one gender was found
-    return null; // meaning both genders where found therefore no filter
+    return found;
 }

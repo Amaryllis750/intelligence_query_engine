@@ -9,17 +9,29 @@ export function parseSearchQuery(query: string) {
     const tokens = normalized.split(/[\s,]+/).filter(Boolean);
 
     const filters: {gender?:string, age_group?: string, min_age?: number, max_age?: number, country_id?: string} = {};
+    let tokensRecognized = false;
 
     const gender = extractGender(tokens);
-    if (gender) filters.gender = gender.toLowerCase();
+    if (gender.size > 0) {
+        tokensRecognized = true;
+        if (gender.size === 1) filters.gender = [...gender][0]!;
+    }
 
     const age = extractAge(normalized, tokens);
-    if (age.age_group) filters.age_group = age.age_group;
-    if (age.min) filters.min_age = age.min;
-    if (age.max) filters.max_age = age.max;
+    if (age.age_group || age.min || age.max) {
+        tokensRecognized = true;
+        if (age.age_group) filters.age_group = age.age_group;
+        if (age.min) filters.min_age = age.min;
+        if (age.max) filters.max_age = age.max;
+    }
 
     const country = extractCountry(normalized, tokens);
-    if (country) filters.country_id = country.toLowerCase();
+    if (country) {
+        tokensRecognized = true;
+        filters.country_id = country.toLowerCase();
+    }
 
-    return filters;
+    if (!tokensRecognized) return { noTokensFound: true };
+
+    return { filters };
 }
